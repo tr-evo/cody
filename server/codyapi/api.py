@@ -143,11 +143,18 @@ def register():
 			{"mail": user.email, "pw": user.password})
 		db.session.commit()
 
-		return jsonify(user.to_dict()), 201
+		return jsonify(user.to_dict()), 200
 
 	except Exception:
 		print("error occured: %s", traceback.format_exc())
 		gen_log.info("Error with commiting new user in register in api.py: %s", traceback.format_exc())
+
+		error_msg = {
+			'message': 'User exists already.',
+			'registered': False
+		}
+		return jsonify(error_msg), 409
+
 
 @api.route('/login/', methods=('POST',))
 def login():

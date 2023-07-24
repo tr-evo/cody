@@ -11,11 +11,16 @@ import store from '@/store'
 Vue.use(VueRouter)
 
 const routes = [
+    {
+    path: '/login/:user/:credential/:id',
+    name: 'LoginParams',
+    component: Login,
+    props: true,
+  },
   {
     path: '/login',
     name: 'Login',
     component: Login,
-    icon: 'mdi-plus-box-multiple',
   },
   {
     path: '/new',

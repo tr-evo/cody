@@ -69,6 +69,7 @@
 
       <v-spacer></v-spacer>
 
+      <!--
       <router-link 
         v-for="route in routersWithoutLogin"
         :to="route"
@@ -80,6 +81,7 @@
           <v-icon left>{{route.icon}}</v-icon><span v-if="$vuetify.breakpoint.name != 'xs'">{{route.name}}</span>
         </v-btn>
       </router-link>
+      -->
     </v-app-bar>
 
     <v-main>
@@ -126,8 +128,15 @@ export default {
 
     routersWithoutLogin() {
       const routesDeepCopy = JSON.parse(JSON.stringify(this.$router.options.routes))
-      routesDeepCopy.shift()
-      return routesDeepCopy
+      var list = []
+
+      for (let i = 0; i < routesDeepCopy.length; i++) {
+        if (!routesDeepCopy[i].name.includes("Log")) {
+          list.push(routesDeepCopy[i])
+        }
+      }
+      list.shift()
+      return list
     }
   },
 

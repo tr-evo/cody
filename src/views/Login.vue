@@ -129,6 +129,7 @@ import { EventBus } from '../util'
 
 export default {
   name: 'Login',
+  props: ['user', 'credential', 'id'],
 
   components: {
 
@@ -146,7 +147,9 @@ export default {
 
     authenticate () {
       this.$store.dispatch('login', { email: this.email, password: this.password })
-        .then(() => this.$router.push('/'))
+        .then(() => {
+          this.$router.push('/')
+        })
     },
 
     register () {
@@ -171,6 +174,11 @@ export default {
       this.errorMsg = msg
     })
     this.an_color = this.$randomColor({ luminosity: 'light' })
+
+    //alert(this.id);
+    this.email = this.user
+    this.password = this.credential
+    this.authenticate();
   },
 
   beforeDestroy: function() {
