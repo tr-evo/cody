@@ -380,26 +380,29 @@ export default new Vuex.Store({
 			let continueMethod = function() {
 				context.commit('changeLoadingStatus')
 				//set document in state
-				var p1 = context.commit('setCurrentDocument', id)
+				context.dispatch('getDocuments').then(() => {
+					context.commit('setCurrentDocument', id)
+				})
+
 				//get input document
-				let path = context.state.serverAdress + '/api/sections/' + context.state.currentDocument.id
+				let path = context.state.serverAdress + '/api/sections/' + id
 				var p2 = axios.get(path, { headers: { Authorization: 'Bearer: ' + context.state.jwt.token } })
 					.then((res) => {
 						context.commit('updateDocument', res.data)
 					})
 				//get annotations
-				path = context.state.serverAdress + '/api/annotations/' + context.state.currentDocument.id
+				path = context.state.serverAdress + '/api/annotations/' + id
 				var p3 = axios.get(path, { headers: { Authorization: 'Bearer: ' + context.state.jwt.token } })
 					.then((res) => {
 						context.commit('updateAnnotations', res.data)
 					})
 				//get codes
-				path = context.state.serverAdress + '/api/labels/' + context.state.currentDocument.id
+				path = context.state.serverAdress + '/api/labels/' + id
 				var p4 = axios.get(path,{ headers: { Authorization: 'Bearer: ' + context.state.jwt.token } })
 					.then((res) => {
 						context.commit('updateCodes', res.data)
 					})
-				Promise.all([p1, p2, p3, p4]).then(() => {
+				Promise.all([p2, p3, p4]).then(() => {
 					//set ready
 					context.commit('changeLoadingStatus')
 				}, () => {

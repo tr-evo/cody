@@ -5,7 +5,7 @@ config.py
 
 class BaseConfig(object):
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///annotations.db'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:////Users/michaelgau/Documents/workspace/cody/server/annotations.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
     # used for encryption and session management

@@ -148,7 +148,19 @@ export default {
     authenticate () {
       this.$store.dispatch('login', { email: this.email, password: this.password })
         .then(() => {
+          this.$store.dispatch('getDocuments')
+          .then(() => {
+            this.$store.dispatch("changeToDocument", this.id)
+            .then(() => {
+              this.$router.push('/document')
+            })
+          })
+
+          /*
+          //TODO: this.id
+          this.$store.dispatch("changeToDocument", id)
           this.$router.push('/')
+          */
         })
     },
 
