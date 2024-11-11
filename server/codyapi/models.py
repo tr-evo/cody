@@ -10,13 +10,14 @@ import sqlite3
 import traceback
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.sql import text
 
 db = SQLAlchemy()
 
 class User():
 	def __init__(self, email, password):
 		self.email = email
-		self.password = generate_password_hash(password, method="sha256")
+		self.password = generate_password_hash(password)
 
 	@classmethod
 	def authenticate(cls, **kwargs):
@@ -29,7 +30,7 @@ class User():
 		#get user from db
 		try:
 			call = db.session.execute(
-				"SELECT id, password FROM users WHERE email = :mail",
+				text("SELECT id, password FROM users WHERE email = :mail"),
 				{"mail": email})
 			user = call.fetchone()
 			db.session.commit()

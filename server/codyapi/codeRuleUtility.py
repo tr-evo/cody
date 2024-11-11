@@ -8,6 +8,7 @@ from whoosh.support import levenshtein
 
 import spacy
 from spacy_cld import LanguageDetector
+from sqlalchemy.sql import text
 
 from .models import db
 
@@ -91,7 +92,7 @@ def getLanguage(documentID, sectionDict):
 	#could rework this entire section so that language gets do not have to transmit a section any more / or make use of section as fallback
 	try:
 		call = db.session.execute(
-					"SELECT language FROM documents WHERE id = :id",
+					text("SELECT language FROM documents WHERE id = :id"),
 					{"id": documentID})
 
 		#handle fetchone only once
@@ -115,7 +116,7 @@ def getLanguage(documentID, sectionDict):
 			tokens = nlp(longest_example)
 
 			db.session.execute(
-						"UPDATE documents SET language = :lang WHERE id = :id",
+						text("UPDATE documents SET language = :lang WHERE id = :id"),
 						{"lang": tokens._.languages[0], "id": documentID})
 			db.session.commit()
 

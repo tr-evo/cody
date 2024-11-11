@@ -4,12 +4,7 @@ module.exports = {
   ],
   devServer: {
     open: process.platform === 'darwin',
-    host: [
-      'localhost',
-      '127.0.0.1',
-      'http://cody.myresearchprocess.com/',
-    ],
-    port: 62041, // CHANGE YOUR PORT HERE!
+    host: '127.0.0.1',
     https: false,
     hotOnly: false,
   },

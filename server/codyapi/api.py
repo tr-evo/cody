@@ -5,6 +5,7 @@ api.py
 """
 
 from flask import Blueprint, jsonify, request, current_app
+from numpy.distutils.conv_template import header
 
 api = Blueprint('api', __name__)
 
@@ -27,6 +28,7 @@ stats_log = logging.getLogger('stats')
 #import own utilities
 import codyapi.codeRuleUtility as codeRuleUtility
 import codyapi.mlUtility as mlUtility
+from sqlalchemy.sql import text
 
 #import model.py for user classes
 from .models import User, db
@@ -68,7 +70,7 @@ sendUpdate = False
 def saveChangeTimestamp(documentID):
 	try:
 		call = db.session.execute(
-			"UPDATE documents SET lastChanged = :last WHERE id = :id",
+			text("UPDATE documents SET lastChanged = :last WHERE id = :id"),
 			{"last": time.time(), "id": documentID})
 		db.session.commit()
 		return "Timestamp saved"
@@ -96,22 +98,25 @@ def token_required(f):
 
 		try:
 			token = auth_headers[1]
-			data = jwt.decode(token, current_app.config['SECRET_KEY'])
-			
+			data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+
 			#cursor = connection.cursor()
 			call = db.session.execute(
-				"SELECT id FROM users WHERE email = :mail",
+				text("SELECT id FROM users WHERE email = :mail"),
 				{"mail": data['sub']})
 			#user[0] = id, user[1] = password
+
+
 			user = call.fetchone()[0]
 			db.session.commit()
 
 			if not user:
 				raise RuntimeError('User not found')
 
+
 			#add list of all documents belonging to user to user return object
 			call = db.session.execute(
-				"SELECT id FROM documents WHERE owner = :owner",
+				text("SELECT id FROM documents WHERE owner = :owner"),
 				{"owner": user})
 			documents = call.fetchall()
 			db.session.commit()
@@ -122,6 +127,7 @@ def token_required(f):
 		except jwt.ExpiredSignatureError:
 			return jsonify(expired_msg), 401 # 401 is Unauthorized HTTP status code
 		except (jwt.InvalidTokenError, Exception) as e:
+			#print(e)
 			gen_log.info(e)
 			return jsonify(invalid_msg), 401
 
@@ -139,7 +145,7 @@ def register():
 	try:
 		#cursor = connection.cursor()
 		call = db.session.execute(
-			"INSERT INTO users (email, password) VALUES (:mail, :pw)",
+			text("INSERT INTO users (email, password) VALUES (:mail, :pw)"),
 			{"mail": user.email, "pw": user.password})
 		db.session.commit()
 
@@ -171,7 +177,7 @@ def login():
 		current_app.config['SECRET_KEY'])
 
 	stats_log.info("> Login user: %s", user['email'])
-	return jsonify({'token': token.decode('UTF-8') })
+	return jsonify({'token': token })
 
 
 
@@ -194,14 +200,15 @@ def collection(current_user, documentID):
 def get_all_annotations(id):
 	try:
 		call = db.session.execute(
-			"SELECT conversation, attribute, annotationID, document, start, length, label, isRecommendation, matchHighlight, confidence FROM annotations WHERE documentID = :id",
+			text("SELECT conversation, attribute, annotationID, document, start, length, label, isRecommendation, matchHighlight, confidence FROM annotations WHERE documentID = :id"),
 			{"id": id})
 		all_annotations = call.fetchall()
 		db.session.commit()
 
 		result = []
 		for row in all_annotations:
-			result.append(row.values())
+			result.append(row)
+		result = [tuple(row) for row in result]
 
 		return result
 	except:
@@ -247,9 +254,9 @@ def single_annotation(current_user, documentID, annotationID):
 def add_single_annotation(documentID, annotationID, data):
 	try:
 		currentSection = getSectionLink(documentID, data["conversation"], data["attribute"], data["id"], data["start"])
-			
+
 		call = db.session.execute(
-			"INSERT INTO annotations (documentID, conversation, attribute, annotationID, document, start, length, label, isRecommendation, sectionLink) values (:docID, :conv, :att, :annID, :doc, :start, :length, :label, :isRec, :secLink)",
+			text("INSERT INTO annotations (documentID, conversation, attribute, annotationID, document, start, length, label, isRecommendation, sectionLink) values (:docID, :conv, :att, :annID, :doc, :start, :length, :label, :isRec, :secLink)"),
 			{"docID": documentID, "conv": data["conversation"], "att": data["attribute"], "annID": annotationID, "doc": data["id"], "start": data["start"], "length": data["length"], "label": data["label"], "isRec": 0, "secLink": currentSection})
 		db.session.commit()
 		result = {'status': 1, 'message': 'New annotation saved'}
@@ -265,14 +272,14 @@ def edit_single_annotation(documentID, annotationID, newLabel):
 	try:
 		#is the annotation to be edited a recommendation?
 		call = db.session.execute(
-			"SELECT isRecommendation FROM annotations WHERE documentID = :id AND annotationID = :annID",
+			text("SELECT isRecommendation FROM annotations WHERE documentID = :id AND annotationID = :annID"),
 			{"id": documentID, "annID": annotationID})
-		isRecommendation = call.fetchone()[0]
+		isRecommendation = call.fetchone()
 		db.session.commit()
 
 		#set isRecommendation to 0 because manual change
 		db.session.execute(
-			"UPDATE annotations SET label = :label, isRecommendation = 0, confidence = Null WHERE documentID = :id AND annotationID = :annID",
+			text("UPDATE annotations SET label = :label, isRecommendation = 0, confidence = Null WHERE documentID = :id AND annotationID = :annID"),
 			{"label": newLabel, "id": documentID, "annID": annotationID})
 		db.session.commit()
 
@@ -281,7 +288,7 @@ def edit_single_annotation(documentID, annotationID, newLabel):
 			stats_log.info("%s-EDIT-REC-%s", documentID, newLabel)
 			#remove recommendations for this annotationID
 			db.session.execute(
-				"DELETE FROM recommendations WHERE documentID = :id AND annotationID = :annID",
+				text("DELETE FROM recommendations WHERE documentID = :id AND annotationID = :annID"),
 				{"id": documentID, "annID": annotationID})
 			db.session.commit()
 		else:
@@ -298,7 +305,7 @@ def edit_single_annotation(documentID, annotationID, newLabel):
 def delete_single_annotation(documentID, annotationID):
 	try:
 		db.session.execute(
-			"DELETE FROM annotations WHERE documentID = :id AND annotationID = :annID",
+			text("DELETE FROM annotations WHERE documentID = :id AND annotationID = :annID"),
 			{"id": documentID, "annID": annotationID})
 		db.session.commit()
 
@@ -314,7 +321,7 @@ def delete_single_annotation(documentID, annotationID):
 def get_single_annotation(documentID, annotationID):
 	try:
 		call = db.session.execute(
-			"SELECT conversation, attribute, annotationID, document, start, length, label, isRecommendation, matchHighlight, confidence FROM annotations WHERE documentID = :id AND annotationID = :annID",
+			text("SELECT conversation, attribute, annotationID, document, start, length, label, isRecommendation, matchHighlight, confidence FROM annotations WHERE documentID = :id AND annotationID = :annID"),
 			{"id": documentID, "annID": annotationID})
 		single = call.fetchone()
 		db.session.commit()
@@ -328,30 +335,32 @@ def get_single_annotation(documentID, annotationID):
 	return result
 
 #helper to get section link based on annotated text / conversation / attribute
-def getSectionLink(documentID, conversation, attribute, text, start):
+def getSectionLink(documentID, conversation, attribute, textDoc, start):
 	try:
 		#first retrieve id and text for all sections that might be annotated
 		call = db.session.execute(
-			"SELECT id, section FROM sections WHERE documentID = :id AND conversation = :conv AND attribute = :att",
+			text("SELECT id, section FROM sections WHERE documentID = :id AND conversation = :conv AND attribute = :att"),
 			{"id": documentID, "conv": conversation, "att": attribute})
 		relevant_sections = call.fetchall()
 		db.session.commit()
 		#transform RowProxy to list of lists
 		result = []
 		for row in relevant_sections:
-			result.append(row.values())
+			result.append(row)
+		result = [tuple(row) for row in result]
+
 		relevant_sections = result
 
 		#make sure that no id is returned because words were matched prematurely for text
 		sum_length = 0
-		text_parts = text.split("\n")
+		text_parts = textDoc.split("\n")
 		#get longest part in text_parts
 		longest_text_break = max(text_parts, key=len)
 		#loop over relevant sections and compare to text
 		for section in relevant_sections:
 			sum_length = sum_length + len(section[1]) + 2
 			#paragraph annotation case
-			if(text in section[1] and start < sum_length):
+			if(textDoc in section[1] and start < sum_length):
 				return section[0]
 			#free form with annotations across sections - return ID of longest matching section
 			elif(longest_text_break in section[1] and start < sum_length):
@@ -392,7 +401,7 @@ def codebook(current_user, documentID):
 def get_all_labels(id):
 	try:
 		call = db.session.execute(
-			"SELECT label, color, codeRule FROM labels WHERE documentID = :id",
+			text("SELECT label, color, codeRule FROM labels WHERE documentID = :id"),
 			{"id": id})
 		all_labels = call.fetchall()
 		db.session.commit()
@@ -400,8 +409,8 @@ def get_all_labels(id):
 		#transform RowProxy to list of lists
 		result = []
 		for row in all_labels:
-			result.append(row.values())
-
+			result.append(row)
+		result = [tuple(row) for row in result]
 		return result
 	except:
 		gen_log.info("Unexpected error get_all_labels: %s", traceback.format_exc())
@@ -412,7 +421,7 @@ def add_single_label(documentID, label):
 	try:
 		#perform insert for all objects in labels input
 		db.session.execute(
-			"INSERT INTO labels (documentID, label, color) values (:id, :label, :color)",
+			text("INSERT INTO labels (documentID, label, color) values (:id, :label, :color)"),
 			{"id": documentID, "label": label["text"], "color": label["color"]})
 		db.session.commit()
 
@@ -468,7 +477,7 @@ def get_single_rule(documentID, label):
 	if label != "default":
 		try:
 			call = db.session.execute(
-				"SELECT codeRule FROM labels WHERE documentID = :id AND label = :label",
+				text("SELECT codeRule FROM labels WHERE documentID = :id AND label = :label"),
 				{"id": documentID, "label": label})
 			single_rule = call.fetchone()
 			db.session.commit()
@@ -501,7 +510,7 @@ def get_single_rule(documentID, label):
 def change_single_rule(documentID, label, data):
 	try:
 		db.session.execute(
-			"UPDATE labels SET codeRule = :CR WHERE documentID = :id AND label = :label",
+			text("UPDATE labels SET codeRule = :CR WHERE documentID = :id AND label = :label"),
 			{"CR": data, "id": documentID, "label": label})
 		db.session.commit()
 
@@ -538,7 +547,7 @@ def generateCR(documentID, label, iteration):
 			#select annotation content from annotation with this label
 			gen_log.info("%s, %s", documentID, label)
 			call = db.session.execute(
-				"SELECT document FROM annotations WHERE documentID = :id AND label = :label",
+				text("SELECT document FROM annotations WHERE documentID = :id AND label = :label"),
 				{"id": documentID, "label": label})
 			section = call.fetchone()
 			db.session.commit()
@@ -609,7 +618,7 @@ def updateMLonAddAnnotation(documentID, useCRRecommendations):
 def removeMLSuggestions(documentID):
 	try:
 		db.session.execute(
-			"UPDATE recommendations SET deletionFlag = 1 WHERE documentID = :docID AND confidence < 1",
+			text("UPDATE recommendations SET deletionFlag = 1 WHERE documentID = :docID AND confidence < 1"),
 			{"docID": documentID})
 		db.session.commit()
 		#update annotations
@@ -641,10 +650,10 @@ def changeToManual(current_user, documentID, annotationID):
 def changeMLtoManual(documentID, annotationID):
 	try:
 		db.session.execute(
-			"UPDATE annotations SET isRecommendation = 0, matchHighlight = NULL, confidence = NULL WHERE documentID = :docID AND annotationID = :anID",
+			text("UPDATE annotations SET isRecommendation = 0, matchHighlight = NULL, confidence = NULL WHERE documentID = :docID AND annotationID = :anID"),
 			{"docID": documentID, "anID": annotationID})
 		db.session.execute(
-			"DELETE FROM recommendations WHERE documentID = :docID AND annotationID = :anID",
+			text("DELETE FROM recommendations WHERE documentID = :docID AND annotationID = :anID"),
 			{"docID": documentID, "anID": annotationID})
 		db.session.commit()
 
@@ -669,7 +678,7 @@ def newCRInput(current_user, documentID, label):
 			limit = None
 			#get label from db
 			call = db.session.execute(
-				"SELECT codeRule FROM labels WHERE documentID = :id AND label = :label",
+				text("SELECT codeRule FROM labels WHERE documentID = :id AND label = :label"),
 				{"id": documentID, "label": decodeLabel})
 			single_rule = call.fetchone()
 			db.session.commit()
@@ -732,7 +741,7 @@ def update_single_label(documentID, label, data):
 	try:
 		#check if label exists already in labels table
 		call = db.session.execute(
-			"SELECT label FROM labels WHERE documentID = :id",
+			text("SELECT label FROM labels WHERE documentID = :id"),
 			{"id": documentID})
 		codebookRP = call.fetchall()
 		#transform RowProxy results to list
@@ -743,26 +752,26 @@ def update_single_label(documentID, label, data):
 		if data in codebookList and data != label:
 			#delete old label, new one exists already
 			db.session.execute(
-				"DELETE FROM labels WHERE documentID = :id AND label = :labelWhere",
+				text("DELETE FROM labels WHERE documentID = :id AND label = :labelWhere"),
 				{"id": documentID, "labelWhere": label})
 			db.session.commit()
 
 		else:
 			#update label in labels table if doesn't exist already
 			db.session.execute(
-				"UPDATE labels SET label = :labelSet WHERE documentID = :id AND label = :labelWhere",
+				text("UPDATE labels SET label = :labelSet WHERE documentID = :id AND label = :labelWhere"),
 				{"labelSet": data, "id": documentID, "labelWhere": label})
 			db.session.commit()
 
 		#second, update all annotations with label and update accordingly --> if new label exists already, that is a merge of existing and "new" annotations
 		db.session.execute(
-			"UPDATE annotations SET label = :labelSet WHERE documentID = :id AND label = :labelWhere",
+			text("UPDATE annotations SET label = :labelSet WHERE documentID = :id AND label = :labelWhere"),
 			{"labelSet": data, "id": documentID, "labelWhere": label})
 		db.session.commit()
 
 		#third, update all recommendations with label and update accordingly
 		db.session.execute(
-			"UPDATE recommendations SET labelCR = :labelCR, labelMR = :labelMR WHERE documentID = :id AND (labelCR = :CRfilter OR labelMR = :MRfilter)",
+			text("UPDATE recommendations SET labelCR = :labelCR, labelMR = :labelMR WHERE documentID = :id AND (labelCR = :CRfilter OR labelMR = :MRfilter)"),
 			{"labelCR": data, "labelMR": data, "id": documentID, "CRfilter": label, "MRfilter": label})
 		db.session.commit()
 
@@ -780,19 +789,19 @@ def delete_single_label(documentID, label):
 	try:
 		#update label in labels table
 		db.session.execute(
-			"DELETE FROM labels WHERE documentID = :id AND label = :labelWhere",
+			text("DELETE FROM labels WHERE documentID = :id AND label = :labelWhere"),
 			{"id": documentID, "labelWhere": label})
 		db.session.commit()
 
 		#second, update all annotations with label and update accordingly
 		db.session.execute(
-			"DELETE FROM annotations WHERE documentID = :id AND label = :labelWhere",
+			text("DELETE FROM annotations WHERE documentID = :id AND label = :labelWhere"),
 			{"id": documentID, "labelWhere": label})
 		db.session.commit()
 
 		#third, update all recommendations with label and update accordingly
 		db.session.execute(
-			"DELETE FROM recommendations WHERE documentID = :id AND (labelCR = :CRfilter OR labelMR = :MRfilter)",
+			text("DELETE FROM recommendations WHERE documentID = :id AND (labelCR = :CRfilter OR labelMR = :MRfilter)"),
 			{"id": documentID, "CRfilter": label, "MRfilter": label})
 		db.session.commit()
 
@@ -830,14 +839,14 @@ def updateList(documentID, data):
 	try:
 		#delete existing labels
 		db.session.execute(
-			"DELETE FROM labels WHERE documentID = :id",
+			text("DELETE FROM labels WHERE documentID = :id"),
 			{"id": documentID})
 		db.session.commit()
 
 		#loop over data and update new labels
 		for key in data:
 			db.session.execute(
-				"INSERT INTO labels (documentID, label, color) values (:id, :label, :color)",
+				text("INSERT INTO labels (documentID, label, color) values (:id, :label, :color)"),
 				{"id": documentID, "label": key["text"], "color": key["color"]})
 		db.session.commit()
 			
@@ -870,31 +879,32 @@ def list(current_user):
 def get_all_documents(current_user):
 	try:
 		call = db.session.execute(
-			"SELECT * FROM documents WHERE owner = :owner",
+			text("SELECT * FROM documents WHERE owner = :owner"),
 			{"owner": current_user["id"]})
 		all_documents = call.fetchall()
 		db.session.commit()
 
 		result = []
 		for row in all_documents:
-			result.append(row.values())
+			result.append(row)
 
+		result = [tuple(row) for row in result]
 		return result
 	except:
 		gen_log.info("Error msg get_all_documents: %s", traceback.format_exc())
-		return "Error with fetching documents"
+		return None
 
 def newDocument(feInput, current_user):
 	try:
 		#populate overview documents table with new document name / settings
 		db.session.execute(
-			"INSERT INTO documents (name, owner, lastChanged, inputType, unitOfAnalysis) values (:name, :owner, :lastChanged, :inputType, :unitOfAnalysis)",
+			text("INSERT INTO documents (name, owner, lastChanged, inputType, unitOfAnalysis) values (:name, :owner, :lastChanged, :inputType, :unitOfAnalysis)"),
 			{"name": feInput["name"], "owner": current_user["id"], "lastChanged": time.time(), "inputType": feInput["settings"]["type"], "unitOfAnalysis": feInput["settings"]["uoa"]})	
 		db.session.commit()
 
 		#populate sections table with document input with documentID of this document
 		call = db.session.execute(
-			"SELECT id FROM documents WHERE name = :name AND owner = :owner",
+			text("SELECT id FROM documents WHERE name = :name AND owner = :owner"),
 			{"name": feInput["name"], "owner": current_user["id"]})
 		documentID = call.fetchone()
 		db.session.commit()
@@ -920,7 +930,7 @@ def newDocument(feInput, current_user):
 	return result
 
 #Input = Text
-def write_Text_Document(documentID, text):
+def write_Text_Document(documentID, textDoc):
 	#case text
 	#temp var for return
 	sectionID = 0
@@ -930,15 +940,16 @@ def write_Text_Document(documentID, text):
 
 	try:
 		#break on every section / return
-		for section in iter(text.splitlines()):
+		for section in iter(textDoc.splitlines()):
 			#write every line as section with delimiter "."
 			for line in section.split("."):
 				#save the id of INSERT row to write them in dict
 				strippedLine = line.strip()
 				if len(strippedLine) > 0:
 					strippedLine = strippedLine + "."
+
 					call = db.session.execute(
-						"INSERT INTO sections (documentID, conversation, attribute, section, label, isRecommendation) values (:documentID, :conversation, :attribute, :section, :label, :isRecommendation)",
+						text("INSERT INTO sections (documentID, conversation, attribute, section, label, isRecommendation) values (:documentID, :conversation, :attribute, :section, :label, :isRecommendation)"),
 						{"documentID": documentID, "conversation": conv, "attribute": attr, "section": strippedLine, "label": "", "isRecommendation": 0})
 					db.session.commit()
 
@@ -953,7 +964,7 @@ def write_Text_Document(documentID, text):
 		gen_log.info("Error msg write_Text_Document: %s", traceback.format_exc())
 
 #Input = CSV
-def write_CSV_Document(documentID, text):
+def write_CSV_Document(documentID, textDoc):
 	# CSV shape >> LadderID, Attribute, Section -> fields separated by comma, lines separated by line breakes
 	#temp var for return
 	sectionID = 0
@@ -963,7 +974,7 @@ def write_CSV_Document(documentID, text):
 		#get next id that will be used when new document is inserted (necessary to match ID of sections table to later match search results and sections table)
 		previousChunks = [0, 0, 0]
 		#loop over lines
-		for line in iter(text.splitlines()):
+		for line in iter(textDoc.splitlines()):
 			#break line into columns | 0: ladder id, 1: attribute, 2: section
 			chunks = line.split(';')
 
@@ -977,7 +988,7 @@ def write_CSV_Document(documentID, text):
 			#save the id of INSERT row to write them in dict
 			chunks[2] = chunks[2].strip()
 			call = db.session.execute(
-				"INSERT INTO sections (documentID, conversation, attribute, section, label, isRecommendation) values (:id, :conv, :att, :section, :label, :isRec)",
+				text("INSERT INTO sections (documentID, conversation, attribute, section, label, isRecommendation) values (:id, :conv, :att, :section, :label, :isRec)"),
 				{"id": documentID, "conv": chunks[0], "att": chunks[1], "section": chunks[2], "label": "", "isRec": 0})
 			db.session.commit()
 			sectionID = call.lastrowid
@@ -1017,7 +1028,7 @@ def write_LadderBot_Document(documentID, json):
 						#write to db
 						#save the id of INSERT row to write them in dict
 						call = db.session.execute(
-							"INSERT INTO sections (documentID, conversation, attribute, section, label, isRecommendation) values (:id, :conv, :att, :section, :label, :isRec)",
+							text("INSERT INTO sections (documentID, conversation, attribute, section, label, isRecommendation) values (:id, :conv, :att, :section, :label, :isRec)"),
 							{"id": documentID, "conv": conv, "att": tempAttribute, "section": temp, "label": "", "isRec": 0})
 						db.session.commit()
 						sectionID = call.lastrowid
@@ -1055,19 +1066,19 @@ def delete_document(documentID):
 	try:
 		#remove annotations, documents, labels, recommendations, sections
 		db.session.execute(
-			"DELETE FROM annotations WHERE documentID = :id",
+			text("DELETE FROM annotations WHERE documentID = :id"),
 			{"id": documentID})
 		db.session.execute(
-			"DELETE FROM documents WHERE id = :id",
+			text("DELETE FROM documents WHERE id = :id"),
 			{"id": documentID})
 		db.session.execute(
-			"DELETE FROM labels WHERE documentID = :id",
+			text("DELETE FROM labels WHERE documentID = :id"),
 			{"id": documentID})
 		db.session.execute(
-			"DELETE FROM recommendations WHERE documentID = :id",
+			text("DELETE FROM recommendations WHERE documentID = :id"),
 			{"id": documentID})
 		db.session.execute(
-			"DELETE FROM sections WHERE documentID = :id",
+			text("DELETE FROM sections WHERE documentID = :id"),
 			{"id": documentID})
 		db.session.commit()
 		#delete index for document as well by deleting relevant folder
@@ -1109,14 +1120,14 @@ def get_all_sections(id):
 	try:
 		#identify type of document
 		call = db.session.execute(
-			"SELECT inputType FROM documents WHERE id = :id",
+			text("SELECT inputType FROM documents WHERE id = :id"),
 			{"id": id})	
 		inputType = call.fetchone()
 		db.session.commit()
 
 		#format output if there are multiple conversations: Text processed as laddering with one conversation & one attribute
 		call = db.session.execute(
-			"SELECT conversation, attribute, section FROM sections WHERE documentID = :id",
+			text("SELECT conversation, attribute, section FROM sections WHERE documentID = :id"),
 			{"id": id})
 		all_sections = call.fetchall()
 		db.session.commit()

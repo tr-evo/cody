@@ -19,6 +19,7 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.model_selection import train_test_split
 
 from sklearn import metrics
+from sqlalchemy.sql import text
 
 import pandas as pd
 import numpy as np
@@ -37,13 +38,13 @@ def recommendationsForLabel(documentID, label, isMLRecommendationList):
 		if isMLRecommendationList == False:
 			#get list of existing recommendations for label (isRecommendation = 1)
 			call = db.session.execute(
-				"SELECT sectionID FROM recommendations WHERE labelCR = :lCR AND documentID = :docID",
+				text("SELECT sectionID FROM recommendations WHERE labelCR = :lCR AND documentID = :docID"),
 				{"lCR": label, "docID": documentID})
 
 		else: #case ML recommendations, retrieve only those recommendations made with ML model
 			#get list of existing recommendations for label (isRecommendation = 1)
 			call = db.session.execute(
-				"SELECT sectionID FROM recommendations WHERE labelMR = :lMR AND documentID = :docID",
+				text("SELECT sectionID FROM recommendations WHERE labelMR = :lMR AND documentID = :docID"),
 				{"lMR": label, "docID": documentID})
 
 		#process results
@@ -95,7 +96,7 @@ def updateRecommendationsTable(documentID, searchResults, label):
 			for entry in inNewNotOld:
 				#check if there isnt any existing recommendation with this label for this particular section to prevent double recommendation of a section
 				call = db.session.execute(
-					"SELECT id FROM recommendations WHERE sectionID = :secID AND labelCR = :lCR AND documentID = :docID",
+					text("SELECT id FROM recommendations WHERE sectionID = :secID AND labelCR = :lCR AND documentID = :docID"),
 					{"secID": entry, "lCR": label, "docID": documentID})
 				results = call.fetchone()
 				db.session.commit()
@@ -104,7 +105,7 @@ def updateRecommendationsTable(documentID, searchResults, label):
 					continue
 
 				db.session.execute(
-					"INSERT INTO recommendations (documentID, sectionID, labelCR, confidence, deletionFlag, ruleHighlight) values (:id, :secID, :lCR, :conf, :delFlag, :rule)",
+					text("INSERT INTO recommendations (documentID, sectionID, labelCR, confidence, deletionFlag, ruleHighlight) values (:id, :secID, :lCR, :conf, :delFlag, :rule)"),
 					{"id": documentID, "secID": entry, "lCR": label, "conf": 1.0, "delFlag": 0, "rule": highlightsList[IDList.index(entry)]})
 				db.session.commit()
 
@@ -113,7 +114,7 @@ def updateRecommendationsTable(documentID, searchResults, label):
 			for entry in inOldNotNew:
 				#FUTURE REFERENCE: At this point, it would be nice to check if there is another label that would make sense for this section
 				db.session.execute(
-					"UPDATE recommendations SET deletionFlag = :flag WHERE sectionID = :secID AND labelCR = :lCR AND documentID = :docID",
+					text("UPDATE recommendations SET deletionFlag = :flag WHERE sectionID = :secID AND labelCR = :lCR AND documentID = :docID"),
 					{"flag": 1, "secID": entry, "lCR": label, "docID": documentID})
 				db.session.commit()
 
@@ -126,7 +127,7 @@ def updateRecommendationsTable(documentID, searchResults, label):
 				criticalWordsToString = ", ".join(criticalWordsList[IDList.index(entry)])
 				#check if there isnt any existing recommendation with this label for this particular section to prevent double recommendation of a section
 				call = db.session.execute(
-					"SELECT id FROM recommendations WHERE sectionID = :secID AND labelMR = :lMR AND documentID = :docID",
+					text("SELECT id FROM recommendations WHERE sectionID = :secID AND labelMR = :lMR AND documentID = :docID"),
 					{"secID": entry, "lMR": label, "docID": documentID})
 				results = call.fetchone()
 				db.session.commit()
@@ -135,7 +136,7 @@ def updateRecommendationsTable(documentID, searchResults, label):
 					continue
 
 				db.session.execute(
-					"INSERT INTO recommendations (documentID, sectionID, labelMR, confidence, deletionFlag, ruleHighlight) values (:id, :secID, :lMR, :conf, :flag, :rule)",
+					text("INSERT INTO recommendations (documentID, sectionID, labelMR, confidence, deletionFlag, ruleHighlight) values (:id, :secID, :lMR, :conf, :flag, :rule)"),
 					{"id": documentID, "secID": entry, "lMR": label, "conf": probaList[IDList.index(entry)], "flag": 0, "rule": criticalWordsToString})
 				db.session.commit()
 
@@ -144,7 +145,7 @@ def updateRecommendationsTable(documentID, searchResults, label):
 			for entry in inOldNotNew:
 				#FUTURE REFERENCE: At this point, it would be nice to check if there is another label that would make sense for this section
 				db.session.execute(
-					"UPDATE recommendations SET deletionFlag = :flag WHERE sectionID = :secID AND labelMR = :lMR AND documentID = :docID",
+					text("UPDATE recommendations SET deletionFlag = :flag WHERE sectionID = :secID AND labelMR = :lMR AND documentID = :docID"),
 					{"flag": 1, "secID": entry, "lMR": label, "docID": documentID})
 				db.session.commit()
 				 	
@@ -166,7 +167,7 @@ def updateRecommendationAnnotations(documentID):
 	try:
 		#get list of sectionIDs for recommendations to be deleted
 		call = db.session.execute(
-			"SELECT annotationID FROM recommendations WHERE deletionFlag = 1 AND documentID = :id",
+			text("SELECT annotationID FROM recommendations WHERE deletionFlag = 1 AND documentID = :id"),
 			{"id": documentID})
 		deletionList = call.fetchall()
 		db.session.commit()
@@ -174,13 +175,13 @@ def updateRecommendationAnnotations(documentID):
 		for entry in deletionList:
 			#delete annotation from table
 			db.session.execute(
-				"DELETE FROM annotations WHERE annotationID = :anID AND isRecommendation = :isRec AND documentID = :docID",
+				text("DELETE FROM annotations WHERE annotationID = :anID AND isRecommendation = :isRec AND documentID = :docID"),
 				{"anID": entry[0], "isRec": 1, "docID": documentID})
 			db.session.commit()
 
 		#delete all flagged recommendations
 		db.session.execute(
-			"DELETE FROM recommendations WHERE deletionFlag = 1 AND documentID = :id",
+			text("DELETE FROM recommendations WHERE deletionFlag = 1 AND documentID = :id"),
 			{"id": documentID})
 		db.session.commit()
 	except:
@@ -192,7 +193,7 @@ def updateRecommendationAnnotations(documentID):
 	try:
 		#get list of sectionIDs for which annotationID is not set in recommendation table
 		call = db.session.execute(
-			"SELECT sectionID, labelCR, labelMR, documentID, ruleHighlight, confidence FROM recommendations WHERE annotationID IS NULL AND documentID = :id",
+			text("SELECT sectionID, labelCR, labelMR, documentID, ruleHighlight, confidence FROM recommendations WHERE annotationID IS NULL AND documentID = :id"),
 			{"id": documentID})
 		insertionList = call.fetchall()
 		db.session.commit()
@@ -208,7 +209,7 @@ def updateRecommendationAnnotations(documentID):
 
 			#first, we need to retrieve conversation, attribute and text based on section ID
 			call = db.session.execute(
-				"SELECT conversation, attribute, section FROM sections WHERE id = :id AND documentID = :docID",
+				text("SELECT conversation, attribute, section FROM sections WHERE id = :id AND documentID = :docID"),
 				{"id": sectionID, "docID": documentID})
 			fetchedInfo = call.fetchone()
 			db.session.commit()
@@ -218,7 +219,7 @@ def updateRecommendationAnnotations(documentID):
 			document = fetchedInfo[2]
 			#second, we can collect all sections for this particular attribute 
 			call = db.session.execute(
-				"SELECT id, section FROM sections WHERE documentID = :id AND conversation = :conv AND attribute = :att ORDER BY id",
+				text("SELECT id, section FROM sections WHERE documentID = :id AND conversation = :conv AND attribute = :att ORDER BY id"),
 				{"id": documentID, "conv": conversation, "att": attribute})
 			fetchedInfo = call.fetchall()
 			db.session.commit()
@@ -235,7 +236,7 @@ def updateRecommendationAnnotations(documentID):
 
 			#check if human annotation exists for this particular section and label already:
 			call = db.session.execute(
-				"SELECT annotationID FROM annotations WHERE documentID = :docID AND sectionLink = :link AND label = :label AND isRecommendation = :isRec",
+				text("SELECT annotationID FROM annotations WHERE documentID = :docID AND sectionLink = :link AND label = :label AND isRecommendation = :isRec"),
 				{"docID": documentID, "link": sectionID, "label": label, "isRec": 0})
 			humanAnnotationExists = call.fetchone()
 			db.session.commit()
@@ -243,7 +244,7 @@ def updateRecommendationAnnotations(documentID):
 			if humanAnnotationExists == None:
 				#add new annotation
 				db.session.execute(
-					"INSERT INTO annotations (documentID, conversation, attribute, annotationID, document, start, length, label, isRecommendation, sectionLink, matchHighlight, confidence) values (:id, :conv, :att, :anID, :doc, :start, :length, :label, :isRec, :link, :match, :conf)",
+					text("INSERT INTO annotations (documentID, conversation, attribute, annotationID, document, start, length, label, isRecommendation, sectionLink, matchHighlight, confidence) values (:id, :conv, :att, :anID, :doc, :start, :length, :label, :isRec, :link, :match, :conf)"),
 					{"id": documentID, "conv": conversation, "att": attribute, "anID": annotationID, "doc": document, "start": start, "length": length, "label": label, "isRec": 1, "link": sectionID, "match": ruleHighlight, "conf": confidence})
 				db.session.commit()
 
@@ -252,14 +253,14 @@ def updateRecommendationAnnotations(documentID):
 			# - CR recommendation route
 			if entry[1] != None:
 				db.session.execute(
-					"UPDATE recommendations SET annotationID = :anID WHERE documentID = :docID AND sectionID = :secID AND labelCR = :lCR",
+					text("UPDATE recommendations SET annotationID = :anID WHERE documentID = :docID AND sectionID = :secID AND labelCR = :lCR"),
 					{"docID": documentID, "anID": annotationID, "secID": sectionID, "lCR": label})
 				db.session.commit()
 
 			# - ML recommendation route
 			else:
 				db.session.execute(
-					"UPDATE recommendations SET annotationID = :anID WHERE documentID = :docID AND sectionID = :secID AND labelMR = :lMR",#
+					text("UPDATE recommendations SET annotationID = :anID WHERE documentID = :docID AND sectionID = :secID AND labelMR = :lMR"),#
 					{"docID": documentID, "anID": annotationID, "secID": sectionID, "lMR": label})
 				db.session.commit()
 
@@ -286,13 +287,13 @@ def iterateSGDprediction(documentID, allowRecommendations):
 		#two approaches can be used: only use human annotations -> allowRecommendations: 0, or use CR recommendations as well -> allowRecommendations: 1
 		if allowRecommendations == 0:
 			call = db.session.execute(
-					"SELECT document, label, sectionLink FROM annotations WHERE documentID = :id AND isRecommendation = 0",
+					text("SELECT document, label, sectionLink FROM annotations WHERE documentID = :id AND isRecommendation = 0"),
 					{"id": documentID})
 
 		else:
 			#make sure to not select ML-based recommendations to not get into a loop of self-supporting suggestions
 			call = db.session.execute(
-					"SELECT document, label, sectionLink, isRecommendation FROM annotations WHERE documentID = :id AND confidence = 1 OR documentID = :id AND isRecommendation = 0",
+					text("SELECT document, label, sectionLink, isRecommendation FROM annotations WHERE documentID = :id AND confidence = 1 OR documentID = :id AND isRecommendation = 0"),
 					{"id": documentID})
 
 		resultsTupleList = call.fetchall()
@@ -310,7 +311,7 @@ def iterateSGDprediction(documentID, allowRecommendations):
 	#get sectionIDs for that no labels exist currently (all - IDs from df)
 	try:
 		call = db.session.execute(
-				"SELECT id, section FROM sections WHERE documentID = :id",
+				text("SELECT id, section FROM sections WHERE documentID = :id"),
 				{"id": documentID})
 		resultsTupleList = call.fetchall()
 		db.session.commit()
