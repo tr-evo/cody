@@ -260,11 +260,11 @@ def add_single_annotation(documentID, annotationID, data):
 			{"docID": documentID, "conv": data["conversation"], "att": data["attribute"], "annID": annotationID, "doc": data["id"], "start": data["start"], "length": data["length"], "label": data["label"], "isRec": 0, "secLink": currentSection})
 		db.session.commit()
 		result = {'status': 1, 'message': 'New annotation saved'}
-	
+
 	except:
 		gen_log.info("Error msg add_single_annotation: %s", traceback.format_exc())
 		result = {'status': 0, 'message': 'Error with PUSH one annotation: ' + documentID + '//' + annotationID}
-	
+
 	stats_log.info("%s-ADD", documentID)
 	return result
 
@@ -295,7 +295,7 @@ def edit_single_annotation(documentID, annotationID, newLabel):
 			stats_log.info("%s-EDIT-MAN-%s", documentID, newLabel)
 
 		result = {'status': 1, 'message': 'Annotation ' + annotationID + ' updated!'}
-	
+
 	except:
 		gen_log.info("Error msg edit_single_annotation: %s", traceback.format_exc())
 		result = {'status': 0, 'message': 'Error with one annotation: ' + documentID + '//' + annotationID}
@@ -396,7 +396,7 @@ def codebook(current_user, documentID):
 			'authenticated': False
 		}
 		return jsonify(invalid_msg), 401
-	
+
 
 def get_all_labels(id):
 	try:
@@ -415,7 +415,7 @@ def get_all_labels(id):
 	except:
 		gen_log.info("Unexpected error get_all_labels: %s", traceback.format_exc())
 		return ("Error with fetching labels for document id " + id)
-		
+
 
 def add_single_label(documentID, label):
 	try:
@@ -429,7 +429,7 @@ def add_single_label(documentID, label):
 	except:
 		result = {'status': 0, 'message': 'Error with PUSH new label'}
 		gen_log.info("Unexpected error add_single_label: %s", traceback.format_exc())
-	
+
 	stats_log.info("%s-NEW-LABEL", documentID)
 	return result
 
@@ -444,7 +444,7 @@ def add_single_label(documentID, label):
 def codeRules(current_user, documentID, label):
 	#decode encoded uri label
 	decodeLabel = unquote(label)
-	
+
 	if (int(documentID), ) in current_user["documents"]:
 		if request.method == 'GET':
 			#return code rule for specific label (document + label is unique)
@@ -501,7 +501,8 @@ def get_single_rule(documentID, label):
 				return [(generateNewRule, ), 1]
 			else:
 				#return existing rule, use values to transform RowProxy object
-				return [single_rule.values(), 0]
+				single_rule = [row for row in single_rule]
+				return [single_rule, 0]
 				
 		except:
 			gen_log.info("Error msg get_single_rule: %s", traceback.format_exc())

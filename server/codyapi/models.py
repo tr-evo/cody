@@ -17,7 +17,7 @@ db = SQLAlchemy()
 class User():
 	def __init__(self, email, password):
 		self.email = email
-		self.password = generate_password_hash(password)
+		self.password = generate_password_hash(password, method='pbkdf2:sha256')
 
 	@classmethod
 	def authenticate(cls, **kwargs):
